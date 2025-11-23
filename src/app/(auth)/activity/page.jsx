@@ -1,13 +1,13 @@
 'use client';
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { ActivityScreen } from '../../../components/pages/activity';
 import { getActivityById, getActivitiesByLesson, getModuleById } from '../../../actions/activity';
 import { saveActivityProgress, getUserActivityProgress, saveStudySession } from '../../../actions/progress';
 import { useUser } from '../../../contexts/UserContext';
 
-export default function ActivityPage() {
+function ActivityPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { user, loading: userLoading, logout } = useUser();
@@ -208,5 +208,17 @@ export default function ActivityPage() {
       currentActivityIndex={currentActivityIndex}
       onLogout={handleLogout}
     />
+  );
+}
+
+export default function ActivityPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen flex items-center justify-center">
+        <p className="text-gray-600">Carregando atividade...</p>
+      </div>
+    }>
+      <ActivityPageContent />
+    </Suspense>
   );
 }
