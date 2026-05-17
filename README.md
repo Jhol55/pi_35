@@ -69,8 +69,8 @@ PI_Grupo_35/
 │           └── middleware.js
 ├── supabase/
 │   └── migrations/            # Scripts SQL
-│       ├── 001_schema.sql     # Schema do banco de dados
-│       └── 002_seed.sql       # Dados iniciais (módulos, atividades, badges)
+│       ├── 20260517000001_create_initial_schema.sql
+│       └── 20260517000002_seed_initial_data.sql
 └── package.json
 ```
 
@@ -119,16 +119,12 @@ Crie um arquivo `.env.local` na raiz do projeto:
 NEXT_PUBLIC_SUPABASE_URL=sua-url-do-supabase
 NEXT_PUBLIC_SUPABASE_ANON_KEY=sua-anon-key
 SUPABASE_SERVICE_ROLE_KEY=sua-service-role-key
+DATABASE_URL=sua-connection-string-postgresql
 ```
 
-#### 3.3. Execute os Scripts SQL
+> **DATABASE_URL**: em **Project Settings → Database → Connection string** (modo URI).
 
-No painel do Supabase, vá em **SQL Editor** e execute os scripts na seguinte ordem:
-
-1. **001_schema.sql** - Cria todas as tabelas, índices e políticas RLS
-2. **002_seed.sql** - Insere os dados iniciais (módulos, lições, atividades, badges)
-
-> **Nota**: Os arquivos estão em `supabase/migrations/`
+As migrations em `supabase/migrations/` rodam automaticamente ao iniciar o projeto (`npm run dev`). Para aplicar manualmente: `npm run migrate`.
 
 ### 4. Execute o Projeto
 
