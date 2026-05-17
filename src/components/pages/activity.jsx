@@ -15,6 +15,7 @@ import {
   ChevronRight,
   LogOut
 } from 'lucide-react';
+import { DinoMemoryGame } from '../games/DinoMemoryGame';
 
 export function ActivityScreen({ 
   userProfile, 
@@ -164,6 +165,22 @@ export function ActivityScreen({
       audio.play().catch(e => console.error("Audio play failed", e));
     }
   };
+
+  if (activityConfig.gameType === 'memory_match') {
+    return (
+      <DinoMemoryGame
+        userProfile={userProfile}
+        onNavigate={onNavigate}
+        updateUserProfile={updateUserProfile}
+        activity={activity}
+        activityConfig={activityConfig}
+        existingProgress={existingProgress}
+        allActivities={allActivities}
+        currentActivityIndex={currentActivityIndex}
+        onLogout={onLogout}
+      />
+    );
+  }
 
   return (
     <div className="h-screen overflow-auto bg-gradient-to-br from-blue-50 to-purple-50">
