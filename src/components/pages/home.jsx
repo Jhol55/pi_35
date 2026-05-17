@@ -1,4 +1,5 @@
 import React from 'react';
+import Image from 'next/image';
 import { Button } from '../ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card';
 import { Progress } from '../ui/progress';
@@ -12,18 +13,80 @@ import {
   Star,
   Heart,
   User,
-  LogOut
+  LogOut,
+  Gamepad2,
+  Brain,
 } from 'lucide-react';
 
-// Icon mapping for modules
 const iconMap = {
-  'BookOpen': BookOpen,
-  'Headphones': Headphones,
-  'Heart': Heart,
-  'Users': Users,
-  'Trophy': Trophy,
-  'Star': Star
+  BookOpen,
+  Headphones,
+  Heart,
+  Users,
+  Trophy,
+  Star,
+  Gamepad2,
+  Brain,
 };
+
+const moduleStyleByCode = {
+  letters: { colorClass: 'bg-blue-500', borderHover: 'hover:border-blue-300' },
+  sounds: { colorClass: 'bg-green-500', borderHover: 'hover:border-green-300' },
+  reading: { colorClass: 'bg-purple-500', borderHover: 'hover:border-purple-300' },
+  memory: {
+    colorClass: 'bg-gradient-to-br from-amber-400 to-orange-500',
+    borderHover: 'hover:border-amber-400',
+    buttonClass:
+      'bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600',
+  },
+};
+
+function DinoPreviewStack() {
+  const previews = [1, 2, 4, 5];
+  return (
+    <div className="flex items-center gap-3 mt-3">
+      <div className="flex -space-x-2.5">
+        {previews.map((n) => (
+          <div
+            key={n}
+            className="relative w-10 h-10 rounded-full border-2 border-white bg-sky-100 shadow-sm overflow-hidden ring-1 ring-amber-200"
+          >
+            <Image
+              src={`/dinos/${n}.png`}
+              alt=""
+              fill
+              sizes="40px"
+              className="object-cover object-[center_20%] scale-[1.35]"
+            />
+          </div>
+        ))}
+      </div>
+      <span className="text-xs text-amber-800/90">6 dinossauros para descobrir</span>
+    </div>
+  );
+}
+
+function ModuleIcon({ module }) {
+  const style = moduleStyleByCode[module.code];
+  const colorClass = style?.colorClass || module.color || 'bg-gray-500';
+  const Icon =
+    module.code === 'memory' ? Brain : iconMap[module.icon_name] || BookOpen;
+
+  return (
+    <div
+      className={`w-12 h-12 shrink-0 ${colorClass} rounded-lg flex items-center justify-center ${
+        module.code === 'memory' ? 'border-2 border-amber-200 shadow-md' : ''
+      }`}
+    >
+      <Icon className="w-6 h-6 text-white" />
+    </div>
+  );
+}
+
+function getActivityLabel(count) {
+  if (count === 1) return '1 atividade';
+  return `${count || 0} atividades`;
+}
 
 export function HomeScreen({ userProfile, onNavigate, modules = [], loading = false, todayProgress = { activitiesCompleted: 0, studyTimeMinutes: 0 }, onLogout }) {
   return (
@@ -139,17 +202,35 @@ export function HomeScreen({ userProfile, onNavigate, modules = [], loading = fa
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {modules.map((module) => {
-                const Icon = iconMap[module.icon_name] || BookOpen;
+                const style = moduleStyleByCode[module.code] || {};
+                const isMemory = module.code === 'memory';
                 return (
-                <Card key={module.id} className="border-2 border-gray-200 hover:border-purple-300 transition-all cursor-pointer hover:shadow-lg">
+                <Card
+                  key={module.id}
+                  className={`border-2 ${
+                    isMemory
+                      ? 'border-amber-200 bg-gradient-to-br from-amber-50/80 to-orange-50/50'
+                      : 'border-gray-200'
+                  } ${style.borderHover || 'hover:border-purple-300'} transition-all cursor-pointer hover:shadow-lg`}
+                >
                   <CardHeader>
-                    <div className="flex items-center gap-3">
-                      <div className={`w-12 h-12 ${module.color} rounded-lg flex items-center justify-center`}>
-                        <Icon className="w-6 h-6 text-white" />
-                      </div>
-                      <div>
-                        <CardTitle className="text-gray-800">{module.title}</CardTitle>
-                        <CardDescription>{module.description}</CardDescription>
+                    <div className="flex items-start gap-3">
+                      <ModuleIcon module={module} />
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-center gap-2 mb-1">
+                          <CardTitle className="text-gray-800">{module.title}</CardTitle>
+                          {isMemory && (
+                            <Badge className="bg-amber-500 hover:bg-amber-500 text-white border-0 text-xs">
+                              Dinossauros
+                            </Badge>
+                          )}
+                        </div>
+                        <CardDescription>
+                          {isMemory
+                            ? 'Vire as cartas e ache os pares! Encontre dinossauros divertidos.'
+                            : module.description}
+                        </CardDescription>
+                        {isMemory && <DinoPreviewStack />}
                       </div>
                     </div>
                   </CardHeader>
@@ -162,16 +243,22 @@ export function HomeScreen({ userProfile, onNavigate, modules = [], loading = fa
                         </div>
                         <Progress value={module.progress} className="h-2" />
                       </div>
-                      
-                      <div className="flex justify-between items-center">
-                        <span className="text-sm text-gray-600">{module.activities || 0} atividades</span>
+
+                      <div className="flex justify-between items-center gap-2">
+                        <span className="text-sm text-gray-600">
+                          {getActivityLabel(module.activities || 0)}
+                        </span>
                         <Button
                           onClick={() => onNavigate('activity', module.id)}
                           size="sm"
-                          className="bg-gradient-to-r from-purple-500 to-blue-500 hover:from-purple-600 hover:to-blue-600 text-white"
+                          className={
+                            isMemory
+                              ? `${style.buttonClass} text-white`
+                              : 'bg-gradient-to-r from-purple-500 to-blue-500 hover:from-purple-600 hover:to-blue-600 text-white'
+                          }
                         >
                           <Play className="w-4 h-4 mr-2" />
-                          Continuar
+                          {isMemory ? 'Jogar' : 'Continuar'}
                         </Button>
                       </div>
                     </div>
