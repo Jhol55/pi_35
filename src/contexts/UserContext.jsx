@@ -6,6 +6,9 @@ import { useRouter } from 'next/navigation';
 
 const UserContext = createContext(null);
 
+const PROFILE_NOT_FOUND_ERROR =
+  'Perfil não encontrado. Entre em contato ou crie conta novamente.';
+
 export function UserProvider({ children }) {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -13,26 +16,23 @@ export function UserProvider({ children }) {
   const supabase = createClient();
 
   useEffect(() => {
-    // Check initial session
     checkUser();
 
-    // Listen for auth changes
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, session) => {
       if (session?.user) {
-        loadUserData(session.user.id);
+        loadUserData();
       } else {
         setUser(null);
       }
     });
 
-    // Listen for user updates (e.g., after completing activity)
     const handleUserUpdate = async () => {
       try {
-        const { data: { session } } = await supabase.auth.getSession();
-        if (session?.user) {
-          await loadUserData(session.user.id);
+        const { data: { user: authUser } } = await supabase.auth.getUser();
+        if (authUser) {
+          await loadUserData();
         }
       } catch (error) {
         console.error('Error handling user update:', error);
@@ -49,13 +49,15 @@ export function UserProvider({ children }) {
         window.removeEventListener('user-updated', handleUserUpdate);
       }
     };
-  }, []); // Remove user?.id dependency to avoid re-registering listener
+  }, []);
 
   const checkUser = async () => {
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session?.user) {
-        await loadUserData(session.user.id);
+      const { data: { user: authUser }, error } = await supabase.auth.getUser();
+      if (error) throw error;
+
+      if (authUser) {
+        await loadUserData();
       } else {
         setUser(null);
       }
@@ -67,30 +69,36 @@ export function UserProvider({ children }) {
     }
   };
 
-  const loadUserData = async (userId) => {
+  const loadUserData = async () => {
     try {
-      const { data, error } = await supabase
-        .from('user')
-        .select('*')
-        .eq('id', userId)
-        .single();
+      const res = await fetch('/api/auth/profile');
 
-      if (error) throw error;
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        console.error('Error loading user data:', body.error || res.statusText);
+        setUser(null);
+        return { data: null, error: body.error || true, status: res.status };
+      }
 
-      setUser(data);
+      const { user: profile } = await res.json();
+      setUser(profile);
+      return { data: profile, error: null };
     } catch (error) {
       console.error('Error loading user data:', error);
       setUser(null);
+      return { data: null, error };
     }
   };
 
-  // Translate Supabase error messages to Portuguese
+  const ensureSession = async () => {
+    await supabase.auth.getSession();
+  };
+
   const translateError = (errorMessage) => {
     if (!errorMessage) return 'Erro desconhecido';
-    
+
     const errorLower = errorMessage.toLowerCase();
-    
-    // Common Supabase auth errors
+
     if (errorLower.includes('email not confirmed') || errorLower.includes('email_not_confirmed')) {
       return 'Email não confirmado';
     }
@@ -112,7 +120,7 @@ export function UserProvider({ children }) {
     if (errorLower.includes('network') || errorLower.includes('fetch')) {
       return 'Erro de conexão. Verifique sua internet';
     }
-    
+
     return errorMessage;
   };
 
@@ -124,31 +132,39 @@ export function UserProvider({ children }) {
       });
 
       if (error) {
-        // If error is email not confirmed, try to confirm it automatically via API
         const errorLower = error.message?.toLowerCase() || '';
-        if (errorLower.includes('email not confirmed') || 
-            errorLower.includes('email_not_confirmed')) {
+        if (
+          errorLower.includes('email not confirmed') ||
+          errorLower.includes('email_not_confirmed')
+        ) {
           try {
-            // Call API to confirm email (will use service role)
             const confirmRes = await fetch('/api/auth/confirm-email', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ email })
+              body: JSON.stringify({ email }),
             });
-            
+
             if (confirmRes.ok) {
-              // Try login again after confirmation
               const { data: retryData, error: retryError } = await supabase.auth.signInWithPassword({
                 email,
                 password,
               });
               if (!retryError && retryData.user) {
-                await loadUserData(retryData.user.id);
+                await ensureSession();
+                const { error: profileError, status } = await loadUserData();
+                if (profileError) {
+                  return {
+                    error:
+                      typeof profileError === 'string'
+                        ? profileError
+                        : PROFILE_NOT_FOUND_ERROR,
+                    status,
+                  };
+                }
                 return { success: true, user: retryData.user };
               }
             }
           } catch (confirmError) {
-            // If auto-confirm fails, continue with original error
             console.error('Error auto-confirming email:', confirmError);
           }
         }
@@ -156,8 +172,16 @@ export function UserProvider({ children }) {
       }
 
       if (data.user) {
-        await loadUserData(data.user.id);
-        return { success: true, user: data.user };
+        await ensureSession();
+        const { data: userData, error: profileError, status } = await loadUserData();
+        if (profileError) {
+          return {
+            error:
+              typeof profileError === 'string' ? profileError : PROFILE_NOT_FOUND_ERROR,
+            status,
+          };
+        }
+        return { success: true, user: userData };
       }
 
       return { error: 'Falha no login' };
@@ -168,13 +192,21 @@ export function UserProvider({ children }) {
 
   const signUp = async (name, email, password) => {
     try {
-      // Sign up with Supabase Auth
-      const { data: authData, error: authError } = await supabase.auth.signUp({
+      const signupRes = await fetch('/api/auth/signup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, email, password }),
+      });
+
+      const signupData = await signupRes.json();
+
+      if (!signupRes.ok) {
+        return { error: signupData.error || 'Falha no cadastro' };
+      }
+
+      const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
         email,
         password,
-        options: {
-          emailRedirectTo: undefined
-        }
       });
 
       if (authError) {
@@ -182,36 +214,15 @@ export function UserProvider({ children }) {
       }
 
       if (authData.user) {
-        // Auto-confirm email using server action
-        const confirmResponse = await fetch('/api/auth/confirm-email', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ userId: authData.user.id })
-        });
-
-        // Create user record in database
-        const { data: userData, error: userError } = await supabase
-          .from('user')
-          .insert({
-            id: authData.user.id,
-            name,
-            email,
-            user_type: 'learner',
-            points: 0,
-            level: 1,
-            badges: [],
-            interests: []
-          })
-          .select()
-          .single();
-
-        if (userError) {
-          return { error: translateError(userError.message) };
+        await ensureSession();
+        const { data: userData, error: profileError, status } = await loadUserData();
+        if (profileError) {
+          return {
+            error:
+              typeof profileError === 'string' ? profileError : PROFILE_NOT_FOUND_ERROR,
+            status,
+          };
         }
-
-        // Reload user data after confirmation
-        await loadUserData(authData.user.id);
-        
         return { success: true, user: userData };
       }
 
@@ -239,7 +250,7 @@ export function UserProvider({ children }) {
         .from('user')
         .update({
           ...updates,
-          updated_at: new Date().toISOString()
+          updated_at: new Date().toISOString(),
         })
         .eq('id', user.id)
         .select()

@@ -48,13 +48,12 @@ export function LoginScreen() {
 
       if (result.error) {
         setError(result.error);
-        setLoading(false);
       } else {
-        // Success - redirect to questionnaire or home
         router.push('/questionnaire');
       }
     } catch (err) {
       setError(err.message || 'Ocorreu um erro');
+    } finally {
       setLoading(false);
     }
   };
